@@ -3,6 +3,7 @@ package com.example.chaosshawarma;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -20,13 +21,13 @@ public final class ChaosShawarmaPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        // Реєструємо крафт
+        // Регистрируем крафт
         registerShawarmaRecipe();
         
-        // Реєструємо слухач подій (щоб шаурму можна було з'їсти)
+        // Регистрируем события (чтобы шаурму можно было есть)
         getServer().getPluginManager().registerEvents(this, this);
         
-        getLogger().info("ChaosShawarma успішно активовано!");
+        getLogger().info("ChaosShawarma успешно активирован!");
     }
 
     private void registerShawarmaRecipe() {
@@ -35,7 +36,7 @@ public final class ChaosShawarmaPlugin extends JavaPlugin implements Listener {
         NamespacedKey key = new NamespacedKey(this, "craft_shawarma");
         ShapedRecipe recipe = new ShapedRecipe(key, shawarma);
 
-        // Форма крафту у верстаку: Хліб зверху, курка посередині, скляна пляшка знизу
+        // Форма крафта в верстаке: Хлеб сверху, жареная курица посередине, стеклянная бутылочка снизу
         recipe.shape(
             " S ", 
             " C ", 
@@ -46,45 +47,58 @@ public final class ChaosShawarmaPlugin extends JavaPlugin implements Listener {
         recipe.setIngredient('C', Material.COOKED_CHICKEN);
         recipe.setIngredient('B', Material.GLASS_BOTTLE);
 
+        // Добавляем рецепт на сервер
         Bukkit.addRecipe(recipe);
     }
 
-    // Метод для створення самого предмета шаурми
+    // Метод для создания предмета шаурмы
     public static ItemStack createShawarmaItem() {
         ItemStack item = new ItemStack(Material.RABBIT_FOOT, 1);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(SHAWARMA_NAME);
             meta.setLore(List.of(
-                "§7Традиційна сочна шаурма",
-                "§eВідновлює 5 одиниць голоду!"
+                "§7Традиционная сочная шаурма",
+                "§eВосстанавливает 5 единиц голода!"
             ));
             item.setItemMeta(meta);
         }
         return item;
     }
 
-    // Подія поїдання: робимо кролячу лапу «їстівною» та додаємо голод
+    // Обработка поедания предмета
     @EventHandler
     public void onConsume(PlayerItemConsumeEvent event) {
         ItemStack item = event.getItem();
         
+        // Проверяем, что игрок ест именно нашу кроличью лапку с названием "Шаурма"
         if (item.getType() == Material.RABBIT_FOOT && item.hasItemMeta()) {
             ItemMeta meta = item.getItemMeta();
             if (meta != null && meta.hasDisplayName() && meta.getDisplayName().equals(SHAWARMA_NAME)) {
                 Player player = event.getPlayer();
                 
-                // Додаємо гравцю 5 одиниць голоду (у майнкрафті 1 одиниця = пів-одиниці голоду на шкалі, тобто 5 це 2.5 курячі ніжки)
-                // Можна також збільшити харчову цінність, наприклад, 6 або 8 для повноцінного перекусу, але тут встановлено рівно 5.
+                // Восстанавливаем 5 единиц голода (2.5 куриные ножки)
                 int currentFood = player.getFoodLevel();
                 player.setFoodLevel(Math.min(currentFood + 5, 20));
                 
-                // Додаємо насичення (saturation), щоб шкала голоду не падала одразу
+                // Добавляем насыщение
                 float currentSaturation = player.getSaturation();
                 player.setSaturation(Math.min(currentSaturation + 6.0f, (float) player.getFoodLevel()));
                 
-                // Оскільки кроляча лапа ванільно не зникає як їжа, а просто залишається в руці чи створює скло,
-                // забираємо 1 шт. предмету вручну або дозволяємо з'їсти (в 1.21+ кастомна логіка поїдання предметів не-їжі вимагає анімації)
+                // Проигрываем звук отрыжки/еды и убираем 1 предмет вручную (так как кроличья лапка ванильно не естся)
+                player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_BURP, 1.0f, 1.0f);
+                
+                // Уменьшаем количество предметов в руке на 1
+                if (item.getAmount() > 1) {
+                    item.setAmount(item.getAmount() - 1);
+                } else {
+                    // Если была одна лапка — заменяем её на пустую стеклянную бутылочку (вместо съеденной)
+                    event.setItem(new ItemStack(Material.GLASS_BOTTLE));
+                    return;
+                }
+                
+                // Даем игроку пустую бутылочку в инвентарь, если лапок было несколько
+                player.getInventory().addItem(new ItemStack(Material.GLASS_BOTTLE));
             }
         }
     }
