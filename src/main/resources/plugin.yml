@@ -1,0 +1,5 @@
+name: ChaosShawarma
+version: 1.0
+main: com.chaossmp.shawarma.ShawarmaPlugin
+api-version: '1.21'
+description: Custom Shawarma and Ketchup plugin for ChaosSMP
