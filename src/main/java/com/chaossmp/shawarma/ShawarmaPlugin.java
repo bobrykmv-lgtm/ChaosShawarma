@@ -7,11 +7,15 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 import java.util.List;
 
@@ -22,17 +26,17 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        // Регистрируем оба рецепта
+        // Регистрируем рецепты
         registerKetchupRecipe();
         registerShawarmaRecipe();
         
-        // Регистрируем события для поедания
+        // Регистрируем события
         getServer().getPluginManager().registerEvents(this, this);
         
-        getLogger().info("ChaosShawarma (Шаурма + Кетчуп) успешно активирован!");
+        getLogger().info("ChaosShawarma успешно активирован!");
     }
 
-    // 1. Рецепт Кетчупа: Пляшка в центре, Сахар и Редстоун по бокам (или сверху/снизу)
+    // 1. Рецепт Кетчупа: Зілля сцілення як основа, Сахар сверху, Редстоун снизу
     private void registerKetchupRecipe() {
         ItemStack ketchup = createKetchupItem();
 
@@ -41,24 +45,19 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
 
         recipe.shape(
             " S ", 
-            " B "  // Здесь B - стеклянная бутылочка, S - сахар, R - редстоун (упростим под 3х3)
-        );
-        // Сделаем красивую форму крафта для кетчупа (например: Сахар, Бутылочка, Редстоун в ряд)
-        // Или вертикально: Сахар сверху, Бутылочка по центру, Редстоун снизу:
-        recipe.shape(
-            " S ", 
-            " B ", 
+            " P ", 
             " R "  
         );
 
         recipe.setIngredient('S', Material.SUGAR);
-        recipe.setIngredient('B', Material.GLASS_BOTTLE);
+        // В качестве бутылочки используем обычное зелье исцеления (или неловкое/водное, но здесь берем зелье)
+        recipe.setIngredient('P', Material.POTION);
         recipe.setIngredient('R', Material.REDSTONE);
 
         Bukkit.addRecipe(recipe);
     }
 
-    // 2. Рецепт Шаурмы: 3 хлеба сверху и снизу, Кетчуп по центру, Бумага слева и справа
+    // 2. Рецепт Шаурмы: 3 хлеба сверху/снизу, Кетчуп по центру, Бумага по бокам
     private void registerShawarmaRecipe() {
         ItemStack shawarma = createShawarmaItem();
 
@@ -66,26 +65,26 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
         ShapedRecipe recipe = new ShapedRecipe(key, shawarma);
 
         recipe.shape(
-            "HHH", // 3 хлеба сверху
-            "PKP", // Бумага слева и справа, Кетчуп посередине
-            "HHH"  // 3 хлеба снизу
+            "HHH", 
+            "PKP", 
+            "HHH"  
         );
 
         recipe.setIngredient('H', Material.BREAD);
         recipe.setIngredient('P', Material.PAPER);
-        // В качестве ингредиента "Кетчуп" используем наш кастомный предмет (бутылочку с редстоуном и сахаром)
-        // В Bukkit для точного рецепта кастомного предмета лучше использовать RecipeChoice:
         recipe.setIngredient('K', new org.bukkit.inventory.RecipeChoice.ExactChoice(createKetchupItem()));
 
         Bukkit.addRecipe(recipe);
     }
 
-    // Создание предмета: Кетчуп
+    // Создание предмета: Кетчуп (на базе зілля сцілення)
     public static ItemStack createKetchupItem() {
         ItemStack item = new ItemStack(Material.POTION, 1);
-        ItemMeta meta = item.getItemMeta();
+        PotionMeta meta = (PotionMeta) item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(KETCHUP_NAME);
+            // Додаємо ефект вилікування, щоб зелля відповідало назві
+            meta.addCustomEffect(new PotionEffect(PotionEffectType.INSTANT_HEALTH, 1, 0), true);
             meta.setLore(List.of(
                 "§7Вкусный томатный соус",
                 "§eИспользуется для крафта шаурмы"
@@ -95,7 +94,7 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
         return item;
     }
 
-    // Создание предмета: Шаурма (кроличья лапка)
+    // Создание предмета: Шаурма
     public static ItemStack createShawarmaItem() {
         ItemStack item = new ItemStack(Material.RABBIT_FOOT, 1);
         ItemMeta meta = item.getItemMeta();
@@ -110,32 +109,51 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
         return item;
     }
 
-    // Обработка поедания шаурмы
+    // Обработка клика ПКМ для поедания не-съедобного предмета (кроличьей лапки)
     @EventHandler
-    public void onConsume(PlayerItemConsumeEvent event) {
-        ItemStack item = event.getItem();
-        
-        if (item.getType() == Material.RABBIT_FOOT && item.hasItemMeta()) {
-            ItemMeta meta = item.getItemMeta();
-            if (meta != null && meta.hasDisplayName() && meta.getDisplayName().equals(SHAWARMA_NAME)) {
-                Player player = event.getPlayer();
-                
-                int currentFood = player.getFoodLevel();
-                player.setFoodLevel(Math.min(currentFood + 5, 20));
-                
-                float currentSaturation = player.getSaturation();
-                player.setSaturation(Math.min(currentSaturation + 6.0f, (float) player.getFoodLevel()));
-                
-                player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_BURP, 1.0f, 1.0f);
-                
-                if (item.getAmount() > 1) {
-                    item.setAmount(item.getAmount() - 1);
-                } else {
-                    event.setItem(new ItemStack(Material.GLASS_BOTTLE));
-                    return;
+    public void onPlayerInteract(PlayerInteractEvent event) {
+        // Проверяем, что игрок кликнул ПКМ в воздух или по блоку
+        if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+            Player player = event.getPlayer();
+            ItemStack item = player.getInventory().getItemInMainHand();
+            
+            // Если в руке наша шаурма
+            if (item.getType() == Material.RABBIT_FOOT && item.hasItemMeta()) {
+                ItemMeta meta = item.getItemMeta();
+                if (meta != null && meta.hasDisplayName() && meta.getDisplayName().equals(SHAWARMA_NAME)) {
+                    
+                    // Проверяем, не полон ли у игрока голод (опционально, но лучше давать есть только если меньше 20)
+                    if (player.getFoodLevel() < 20) {
+                        event.setCancelled(true); // Отменяем стандартное действие, чтобы лапа не ставилась никуда
+                        
+                        // Восстанавливаем 5 единиц голода и сытость
+                        int currentFood = player.getFoodLevel();
+                        player.setFoodLevel(Math.min(currentFood + 5, 20));
+                        
+                        float currentSaturation = player.getSaturation();
+                        player.setSaturation(Math.min(currentSaturation + 6.0f, (float) player.getFoodLevel()));
+                        
+                        // Звуки кушанья и отрыжки
+                        player.playSound(player.getLocation(), Sound.ENTITY_GENERIC_EAT, 1.0f, 1.0f);
+                        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_BURP, 1.0f, 1.0f);
+                        
+                        // Уменьшаем количество шаурмы в руке на 1
+                        if (item.getAmount() > 1) {
+                            item.setAmount(item.getAmount() - 1);
+                        } else {
+                            player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
+                        }
+                        
+                        // Даем пустую стеклянную бутылочку за съеденный кетчуп/упаковку
+                        HashMap<Integer, ItemStack> leftover = player.getInventory().addItem(new ItemStack(Material.GLASS_BOTTLE));
+                        // Если инвентарь полон, дропаем бутылочку на землю
+                        for (ItemStack drop : leftover.values()) {
+                            player.getWorld().dropItem(player.getLocation(), drop);
+                        }
+                    } else {
+                        player.sendMessage("§cВы не голодны!");
+                    }
                 }
-                
-                player.getInventory().addItem(new ItemStack(Material.GLASS_BOTTLE));
             }
         }
     }
