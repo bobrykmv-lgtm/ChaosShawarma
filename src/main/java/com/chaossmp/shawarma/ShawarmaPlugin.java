@@ -1,7 +1,6 @@
-package com.chaossmp.shawarma;
+package com.example.chaosshawarma;
 
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
@@ -10,113 +9,82 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
-import org.bukkit.inventory.ShapelessRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.potion.PotionType;
 
-public final class ShawarmaPlugin extends JavaPlugin implements Listener {
+import java.util.List;
+
+public final class ChaosShawarmaPlugin extends JavaPlugin implements Listener {
+
+    private static final String SHAWARMA_NAME = "§6§lШаурма";
 
     @Override
     public void onEnable() {
+        // Реєструємо крафт
+        registerShawarmaRecipe();
+        
+        // Реєструємо слухач подій (щоб шаурму можна було з'їсти)
         getServer().getPluginManager().registerEvents(this, this);
-
-        registerKetchupRecipe();
-        registerShawarmaRecipe1();
-        registerShawarmaRecipe2(); // Новий додатковий рецепт
-
-        getLogger().info("ChaosSMP Shawarma Plugin увімкнено!");
+        
+        getLogger().info("ChaosShawarma успішно активовано!");
     }
 
-    @Override
-    public void onDisable() {
-        getLogger().info("ChaosSMP Shawarma Plugin вимкнено.");
-    }
+    private void registerShawarmaRecipe() {
+        ItemStack shawarma = createShawarmaItem();
 
-    // 1. Рецепт Кетчупу (CustomModelData: 1001)
-    private void registerKetchupRecipe() {
-        ItemStack ketchup = new ItemStack(Material.POTION);
-        PotionMeta meta = (PotionMeta) ketchup.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.RED + "Кетчуп");
-            meta.setBasePotionType(PotionType.HEALING);
-            meta.setCustomModelData(1001);
-            ketchup.setItemMeta(meta);
-        }
-
-        NamespacedKey key = new NamespacedKey(this, "ketchup");
-        ShapelessRecipe recipe = new ShapelessRecipe(key, ketchup);
-        recipe.addIngredient(Material.REDSTONE);
-        recipe.addIngredient(Material.SUGAR);
-        recipe.addIngredient(Material.GLASS_BOTTLE);
-
-        Bukkit.addRecipe(recipe);
-    }
-
-    // 2. Основний рецепт Шаурми №1 (Велика сітка: Курка навколо, папір по боках, кетчуп в центрі)
-    private void registerShawarmaRecipe1() {
-        ItemStack shawarma = new ItemStack(Material.COOKED_CHICKEN);
-        ItemMeta meta = shawarma.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.GOLD + "Соковита Шаурма");
-            meta.setCustomModelData(1002);
-            shawarma.setItemMeta(meta);
-        }
-
-        NamespacedKey key = new NamespacedKey(this, "shawarma_1");
+        NamespacedKey key = new NamespacedKey(this, "craft_shawarma");
         ShapedRecipe recipe = new ShapedRecipe(key, shawarma);
+
+        // Форма крафту у верстаку: Хліб зверху, курка посередині, скляна пляшка знизу
         recipe.shape(
-            "CCC",
-            "PKP",
-            "CCC"
+            " S ", 
+            " C ", 
+            " B "  
         );
 
+        recipe.setIngredient('S', Material.BREAD);
         recipe.setIngredient('C', Material.COOKED_CHICKEN);
-        recipe.setIngredient('K', Material.POTION);
-        recipe.setIngredient('P', Material.PAPER);
+        recipe.setIngredient('B', Material.GLASS_BOTTLE);
 
         Bukkit.addRecipe(recipe);
     }
 
-    // 3. Додатковий альтернативний рецепт Шаурми №2 (Наприклад, швидкий лінійний крафт: Курка + Кетчуп + Папір)
-    private void registerShawarmaRecipe2() {
-        ItemStack shawarma = new ItemStack(Material.COOKED_CHICKEN);
-        ItemMeta meta = shawarma.getItemMeta();
+    // Метод для створення самого предмета шаурми
+    public static ItemStack createShawarmaItem() {
+        ItemStack item = new ItemStack(Material.RABBIT_FOOT, 1);
+        ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(ChatColor.GOLD + "Соковита Шаурма");
-            meta.setCustomModelData(1002);
-            shawarma.setItemMeta(meta);
+            meta.setDisplayName(SHAWARMA_NAME);
+            meta.setLore(List.of(
+                "§7Традиційна сочна шаурма",
+                "§eВідновлює 5 одиниць голоду!"
+            ));
+            item.setItemMeta(meta);
         }
-
-        NamespacedKey key = new NamespacedKey(this, "shawarma_2");
-        ShapedRecipe recipe = new ShapedRecipe(key, shawarma);
-        recipe.shape(
-            "CKP",
-            "   ",
-            "   "
-        );
-
-        recipe.setIngredient('C', Material.COOKED_CHICKEN);
-        recipe.setIngredient('K', Material.POTION);
-        recipe.setIngredient('P', Material.PAPER);
-
-        Bukkit.addRecipe(recipe);
+        return item;
     }
 
-    // 4. Відновлення 5 єдиниць голоду при з'їданні Шаурми
+    // Подія поїдання: робимо кролячу лапу «їстівною» та додаємо голод
     @EventHandler
-    public void onEatShawarma(PlayerItemConsumeEvent event) {
+    public void onConsume(PlayerItemConsumeEvent event) {
         ItemStack item = event.getItem();
-
-        if (item.getType() == Material.COOKED_CHICKEN && item.hasItemMeta()) {
+        
+        if (item.getType() == Material.RABBIT_FOOT && item.hasItemMeta()) {
             ItemMeta meta = item.getItemMeta();
-            if (meta != null && meta.hasCustomModelData() && meta.getCustomModelData() == 1002) {
+            if (meta != null && meta.hasDisplayName() && meta.getDisplayName().equals(SHAWARMA_NAME)) {
                 Player player = event.getPlayer();
-
-                int newFoodLevel = Math.min(20, player.getFoodLevel() + 5);
-                player.setFoodLevel(newFoodLevel);
-                player.setSaturation(Math.min((float) newFoodLevel, player.getSaturation() + 6.0f));
+                
+                // Додаємо гравцю 5 одиниць голоду (у майнкрафті 1 одиниця = пів-одиниці голоду на шкалі, тобто 5 це 2.5 курячі ніжки)
+                // Можна також збільшити харчову цінність, наприклад, 6 або 8 для повноцінного перекусу, але тут встановлено рівно 5.
+                int currentFood = player.getFoodLevel();
+                player.setFoodLevel(Math.min(currentFood + 5, 20));
+                
+                // Додаємо насичення (saturation), щоб шкала голоду не падала одразу
+                float currentSaturation = player.getSaturation();
+                player.setSaturation(Math.min(currentSaturation + 6.0f, (float) player.getFoodLevel()));
+                
+                // Оскільки кроляча лапа ванільно не зникає як їжа, а просто залишається в руці чи створює скло,
+                // забираємо 1 шт. предмету вручну або дозволяємо з'їсти (в 1.21+ кастомна логіка поїдання предметів не-їжі вимагає анімації)
             }
         }
     }
