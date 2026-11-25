@@ -1,15 +1,18 @@
 package com.chaossmp.shawarma;
 
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.ShapedRecipe;
@@ -20,18 +23,18 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionType;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public final class ShawarmaPlugin extends JavaPlugin implements Listener {
-
-    private static final String SHAWARMA_NAME = "§6§lШаурма";
-    private static final String KETCHUP_NAME = "§c§lКетчуп";
 
     private NamespacedKey ketchupRecipeKey;
     private NamespacedKey shawarmaRecipeKey;
 
     @Override
     public void onEnable() {
+        saveDefaultConfig();
+
         this.ketchupRecipeKey = new NamespacedKey(this, "craft_ketchup");
         this.shawarmaRecipeKey = new NamespacedKey(this, "craft_shawarma");
 
@@ -39,6 +42,10 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
         registerShawarmaRecipe();
 
         getServer().getPluginManager().registerEvents(this, this);
+
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            unlockRecipes(online);
+        }
 
         getLogger().info("ChaosShawarma успешно активирован!");
     }
@@ -53,7 +60,17 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // 1. Рецепт Кетчупа: Сахар сверху, Зелье исцеления по центру, Редстоун снизу
+    private void unlockRecipes(Player player) {
+        player.discoverRecipe(ketchupRecipeKey);
+        player.discoverRecipe(shawarmaRecipeKey);
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        unlockRecipes(event.getPlayer());
+    }
+
+    // 1. Рецепт Кетчупа: сверху 1 редстоун, посередине бутылка с водой, снизу 1 сахар
     private void registerKetchupRecipe() {
         Bukkit.removeRecipe(ketchupRecipeKey);
 
@@ -61,19 +78,19 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
         ShapedRecipe recipe = new ShapedRecipe(ketchupRecipeKey, ketchup);
 
         recipe.shape(
-            " S ",
-            " P ",
-            " R "
+            " R ",
+            " W ",
+            " S "
         );
 
-        recipe.setIngredient('S', Material.SUGAR);
-        recipe.setIngredient('P', Material.POTION);
         recipe.setIngredient('R', Material.REDSTONE);
+        recipe.setIngredient('W', Material.POTION);
+        recipe.setIngredient('S', Material.SUGAR);
 
         Bukkit.addRecipe(recipe);
     }
 
-    // 2. Рецепт Шаурмы: 3 хлеба сверху/снизу, Кетчуп по центру, Бумага по бокам
+    // 2. Рецепт Шаурмы: сверху и снизу по 3 хлеба, слева и справа курица, посередине кетчуп
     private void registerShawarmaRecipe() {
         Bukkit.removeRecipe(shawarmaRecipeKey);
 
@@ -82,48 +99,59 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
 
         recipe.shape(
             "HHH",
-            "PKP",
+            "CKC",
             "HHH"
         );
 
         recipe.setIngredient('H', Material.BREAD);
-        recipe.setIngredient('P', Material.PAPER);
+        recipe.setIngredient('C', Material.COOKED_CHICKEN);
         recipe.setIngredient('K', new RecipeChoice.ExactChoice(createKetchupItem()));
 
         Bukkit.addRecipe(recipe);
     }
 
-    // Создание предмета: Кетчуп (под текстуру glass_bottle в ресурс-паке)
-    public static ItemStack createKetchupItem() {
+    private String color(String text) {
+        return ChatColor.translateAlternateColorCodes('&', text == null ? "" : text);
+    }
+
+    private List<String> colorList(List<String> lines) {
+        List<String> result = new ArrayList<>();
+        if (lines == null) {
+            return result;
+        }
+        for (String line : lines) {
+            result.add(color(line));
+        }
+        return result;
+    }
+
+    // Кетчуп (текстура glass_bottle в ресурс-паке)
+    public ItemStack createKetchupItem() {
+        FileConfiguration cfg = getConfig();
         ItemStack item = new ItemStack(Material.GLASS_BOTTLE, 1);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(KETCHUP_NAME);
-            meta.setLore(List.of(
-                "§7Вкусный томатный соус",
-                "§eПКМ: восстановить здоровье или скрафтить шаурму"
-            ));
+            meta.setDisplayName(color(cfg.getString("items.ketchup.name", "&c&lКетчуп")));
+            meta.setLore(colorList(cfg.getStringList("items.ketchup.lore")));
             item.setItemMeta(meta);
         }
         return item;
     }
 
-    // Создание предмета: Шаурма (под текстуру cooked_beef в ресурс-паке)
-    public static ItemStack createShawarmaItem() {
+    // Шаурма (текстура cooked_beef в ресурс-паке)
+    public ItemStack createShawarmaItem() {
+        FileConfiguration cfg = getConfig();
         ItemStack item = new ItemStack(Material.COOKED_BEEF, 1);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(SHAWARMA_NAME);
-            meta.setLore(List.of(
-                "§7Традиционная сочная шаурма с кетчупом",
-                "§eВосстанавливает 5 единиц голода!"
-            ));
+            meta.setDisplayName(color(cfg.getString("items.shawarma.name", "&6&lШаурма")));
+            meta.setLore(colorList(cfg.getStringList("items.shawarma.lore")));
             item.setItemMeta(meta);
         }
         return item;
     }
 
-    // Проверяем, что для крафта кетчупа используется именно зелье исцеления
+    // Проверка, что посередине крафта кетчупа именно бутылка с водой
     @EventHandler
     public void onPrepareCraft(PrepareItemCraftEvent event) {
         if (event.getRecipe() == null) {
@@ -132,18 +160,16 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
 
         if (event.getRecipe() instanceof ShapedRecipe shaped && shaped.getKey().equals(ketchupRecipeKey)) {
             ItemStack[] matrix = event.getInventory().getMatrix();
-            // Центральная клетка сетки крафта 3x3 имеет индекс 4
             ItemStack centerItem = matrix.length > 4 ? matrix[4] : null;
 
-            boolean validHealingPotion = false;
+            boolean isWaterBottle = false;
             if (centerItem != null && centerItem.getType() == Material.POTION && centerItem.hasItemMeta()) {
                 if (centerItem.getItemMeta() instanceof PotionMeta potionMeta) {
-                    PotionType potionType = potionMeta.getBasePotionType();
-                    validHealingPotion = (potionType == PotionType.HEALING || potionType == PotionType.STRONG_HEALING);
+                    isWaterBottle = (potionMeta.getBasePotionType() == PotionType.WATER);
                 }
             }
 
-            if (!validHealingPotion) {
+            if (!isWaterBottle) {
                 event.getInventory().setResult(null);
             }
         }
@@ -167,33 +193,40 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
             return;
         }
 
+        FileConfiguration cfg = getConfig();
+        String shawarmaName = color(cfg.getString("items.shawarma.name", "&6&lШаурма"));
+        String ketchupName = color(cfg.getString("items.ketchup.name", "&c&lКетчуп"));
         String displayName = meta.getDisplayName();
 
         // Поедание шаурмы
-        if (item.getType() == Material.COOKED_BEEF && displayName.equals(SHAWARMA_NAME)) {
+        if (item.getType() == Material.COOKED_BEEF && displayName.equals(shawarmaName)) {
             if (player.getFoodLevel() < 20) {
                 event.setCancelled(true);
 
+                int hungerGain = cfg.getInt("food.shawarma-hunger", 5);
+                float saturationGain = (float) cfg.getDouble("food.shawarma-saturation", 6.0);
+
                 int currentFood = player.getFoodLevel();
-                player.setFoodLevel(Math.min(currentFood + 5, 20));
+                player.setFoodLevel(Math.min(currentFood + hungerGain, 20));
 
                 float currentSaturation = player.getSaturation();
-                player.setSaturation(Math.min(currentSaturation + 6.0f, (float) player.getFoodLevel()));
+                player.setSaturation(Math.min(currentSaturation + saturationGain, (float) player.getFoodLevel()));
 
                 player.playSound(player.getLocation(), Sound.ENTITY_GENERIC_EAT, 1.0f, 1.0f);
                 player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_BURP, 1.0f, 1.0f);
 
                 consumeOneItem(player, item);
             } else {
-                player.sendMessage("§cВы не голодны!");
+                player.sendMessage(color(cfg.getString("messages.not-hungry", "&cВы не голодны!")));
             }
             return;
         }
 
         // Использование кетчупа ПКМ
-        if (item.getType() == Material.GLASS_BOTTLE && displayName.equals(KETCHUP_NAME)) {
+        if (item.getType() == Material.GLASS_BOTTLE && displayName.equals(ketchupName)) {
             event.setCancelled(true);
-            player.addPotionEffect(new PotionEffect(PotionEffectType.INSTANT_HEALTH, 1, 0, true, false));
+            int amplifier = Math.max(0, cfg.getInt("food.ketchup-instant-health", 1) - 1);
+            player.addPotionEffect(new PotionEffect(PotionEffectType.INSTANT_HEALTH, 1, amplifier, true, false));
             player.playSound(player.getLocation(), Sound.ENTITY_GENERIC_DRINK, 1.0f, 1.1f);
             consumeOneItem(player, item);
         }
