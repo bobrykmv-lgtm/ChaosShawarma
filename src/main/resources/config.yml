@@ -1,0 +1,19 @@
+items:
+  ketchup:
+    name: "&c&lКетчуп"
+    lore:
+      - "&7Вкусный томатный соус"
+      - "&eИспользуется для крафта шаурмы"
+  shawarma:
+    name: "&6&lШаурма"
+    lore:
+      - "Очень хорошая шаурма!"
+      - "&eВосстанавливает 5 единиц голода!"
+
+food:
+  shawarma-hunger: 5
+  shawarma-saturation: 6.0
+  ketchup-instant-health: 1
+
+messages:
+  not-hungry: "&cВы не голодны!"
