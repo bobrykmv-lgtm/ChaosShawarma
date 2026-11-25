@@ -8,6 +8,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.RecipeChoice;
@@ -19,7 +20,6 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionType;
 
-import java.util.HashMap;
 import java.util.List;
 
 public final class ShawarmaPlugin extends JavaPlugin implements Listener {
@@ -27,8 +27,14 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
     private static final String SHAWARMA_NAME = "§6§lШаурма";
     private static final String KETCHUP_NAME = "§c§lКетчуп";
 
+    private NamespacedKey ketchupRecipeKey;
+    private NamespacedKey shawarmaRecipeKey;
+
     @Override
     public void onEnable() {
+        this.ketchupRecipeKey = new NamespacedKey(this, "craft_ketchup");
+        this.shawarmaRecipeKey = new NamespacedKey(this, "craft_shawarma");
+
         registerKetchupRecipe();
         registerShawarmaRecipe();
 
@@ -37,12 +43,22 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
         getLogger().info("ChaosShawarma успешно активирован!");
     }
 
-    // 1. Рецепт Кетчупа: Зелье исцеления как основа, Сахар сверху, Редстоун снизу
-    private void registerKetchupRecipe() {
-        ItemStack ketchup = createKetchupItem();
+    @Override
+    public void onDisable() {
+        if (ketchupRecipeKey != null) {
+            Bukkit.removeRecipe(ketchupRecipeKey);
+        }
+        if (shawarmaRecipeKey != null) {
+            Bukkit.removeRecipe(shawarmaRecipeKey);
+        }
+    }
 
-        NamespacedKey key = new NamespacedKey(this, "craft_ketchup");
-        ShapedRecipe recipe = new ShapedRecipe(key, ketchup);
+    // 1. Рецепт Кетчупа: Сахар сверху, Зелье исцеления по центру, Редстоун снизу
+    private void registerKetchupRecipe() {
+        Bukkit.removeRecipe(ketchupRecipeKey);
+
+        ItemStack ketchup = createKetchupItem();
+        ShapedRecipe recipe = new ShapedRecipe(ketchupRecipeKey, ketchup);
 
         recipe.shape(
             " S ",
@@ -50,15 +66,8 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
             " R "
         );
 
-        ItemStack healingPotion = new ItemStack(Material.POTION, 1);
-        PotionMeta potionMeta = (PotionMeta) healingPotion.getItemMeta();
-        if (potionMeta != null) {
-            potionMeta.setBasePotionType(PotionType.HEALING);
-            healingPotion.setItemMeta(potionMeta);
-        }
-
         recipe.setIngredient('S', Material.SUGAR);
-        recipe.setIngredient('P', new RecipeChoice.ExactChoice(healingPotion));
+        recipe.setIngredient('P', Material.POTION);
         recipe.setIngredient('R', Material.REDSTONE);
 
         Bukkit.addRecipe(recipe);
@@ -66,10 +75,10 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
 
     // 2. Рецепт Шаурмы: 3 хлеба сверху/снизу, Кетчуп по центру, Бумага по бокам
     private void registerShawarmaRecipe() {
-        ItemStack shawarma = createShawarmaItem();
+        Bukkit.removeRecipe(shawarmaRecipeKey);
 
-        NamespacedKey key = new NamespacedKey(this, "craft_shawarma");
-        ShapedRecipe recipe = new ShapedRecipe(key, shawarma);
+        ItemStack shawarma = createShawarmaItem();
+        ShapedRecipe recipe = new ShapedRecipe(shawarmaRecipeKey, shawarma);
 
         recipe.shape(
             "HHH",
@@ -114,6 +123,32 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
         return item;
     }
 
+    // Проверяем, что для крафта кетчупа используется именно зелье исцеления
+    @EventHandler
+    public void onPrepareCraft(PrepareItemCraftEvent event) {
+        if (event.getRecipe() == null) {
+            return;
+        }
+
+        if (event.getRecipe() instanceof ShapedRecipe shaped && shaped.getKey().equals(ketchupRecipeKey)) {
+            ItemStack[] matrix = event.getInventory().getMatrix();
+            // Центральная клетка сетки крафта 3x3 имеет индекс 4
+            ItemStack centerItem = matrix.length > 4 ? matrix[4] : null;
+
+            boolean validHealingPotion = false;
+            if (centerItem != null && centerItem.getType() == Material.POTION && centerItem.hasItemMeta()) {
+                if (centerItem.getItemMeta() instanceof PotionMeta potionMeta) {
+                    PotionType potionType = potionMeta.getBasePotionType();
+                    validHealingPotion = (potionType == PotionType.HEALING || potionType == PotionType.STRONG_HEALING);
+                }
+            }
+
+            if (!validHealingPotion) {
+                event.getInventory().setResult(null);
+            }
+        }
+    }
+
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
@@ -155,7 +190,7 @@ public final class ShawarmaPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        // Использование кетчупа ПКМ (быстрый томатный буст)
+        // Использование кетчупа ПКМ
         if (item.getType() == Material.GLASS_BOTTLE && displayName.equals(KETCHUP_NAME)) {
             event.setCancelled(true);
             player.addPotionEffect(new PotionEffect(PotionEffectType.INSTANT_HEALTH, 1, 0, true, false));
